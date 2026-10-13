@@ -362,18 +362,60 @@ body{
   .qtext{ font-size:18px }
   .choices, .choices.long, .qbody.has-fig .choices{ grid-template-columns:1fr }
   .choices.generic{ grid-template-columns:repeat(4,1fr) }
-  .trainer-pill{ display:none   .hero-flex{ flex-direction:column-reverse; align-items:flex-start; gap:14px }
-  .hero-photo{ width:84px; height:84px }
-}
-  .hero h1{ font-size:21px   .hero-flex{ flex-direction:column-reverse; align-items:flex-start; gap:14px }
-  .hero-photo{ width:84px; height:84px }
-}
-  .result-score{ font-size:36px   .hero-flex{ flex-direction:column-reverse; align-items:flex-start; gap:14px }
-  .hero-photo{ width:84px; height:84px }
-}
+  .trainer-pill{ display:none }
+  .hero h1{ font-size:21px }
+  .result-score{ font-size:36px }
   .hero-flex{ flex-direction:column-reverse; align-items:flex-start; gap:14px }
   .hero-photo{ width:84px; height:84px }
+  .qpanel-grid{ grid-template-columns:repeat(6,1fr) }
+  .quiz-nav .btn{ padding:12px 14px }
 }
+
+/* QUIZ: side panel (question navigator) */
+.quiz-layout{ display:grid; grid-template-columns:minmax(0,1fr) 224px; gap:18px; align-items:start }
+.quiz-main{ min-width:0 }
+.qpanel{
+  background:var(--card); border:1px solid var(--line); border-radius:20px; padding:16px 14px 14px;
+  box-shadow:0 10px 30px rgba(74,14,26,.08); position:sticky; top:84px; overflow:hidden;
+}
+.qpanel::before{ content:""; position:absolute; inset:0 0 auto 0; height:4px; background:linear-gradient(90deg,var(--gold-2),var(--wine-2) 60%,var(--purple)); }
+.qpanel-title{ display:flex; align-items:center; justify-content:space-between; font-weight:900; color:var(--wine-2); font-size:15px; margin:4px 0 10px }
+.qpanel-title small{ font-size:11px; font-weight:800; background:#f1e7d1; padding:2px 9px; border-radius:999px }
+.qpanel-stats{ display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:12px }
+.qstat{ text-align:center; border-radius:12px; padding:6px 2px 5px; background:#faf4e4; border:1px solid var(--line) }
+.qstat b{ display:block; font-size:18px; line-height:1.2; font-weight:900 }
+.qstat span{ font-size:10.5px; font-weight:700; color:var(--muted) }
+.qstat.s-done b{ color:var(--green) }
+.qstat.s-todo b{ color:var(--wine-2) }
+.qstat.s-flag b{ color:var(--gold) }
+.qpanel-grid{ display:grid; grid-template-columns:repeat(5,1fr); gap:7px }
+.qsq{
+  position:relative; aspect-ratio:1/1; border-radius:11px; border:1.5px solid #dccfae; background:#fffdf8;
+  color:var(--wine-2); font-family:inherit; font-weight:900; font-size:15px; cursor:pointer; padding:0;
+  display:flex; align-items:center; justify-content:center;
+  transition:transform .12s, box-shadow .12s, background .12s;
+}
+.qsq:hover{ transform:translateY(-2px); box-shadow:0 5px 12px rgba(74,14,26,.15) }
+.qsq.done{ background:var(--green); border-color:var(--green); color:#fff }
+.qsq.flagged{ background:var(--gold-2); border-color:var(--gold); color:var(--wine) }
+.qsq.flagged.done{ background:var(--green); border-color:var(--gold); color:#fff }
+.qsq.flagged::after{ content:"\2691"; position:absolute; top:-6px; left:-5px; font-size:12px; line-height:1; color:var(--wine-2);
+  background:#fff; border:1px solid var(--gold); border-radius:50%; width:16px; height:16px; display:flex; align-items:center; justify-content:center }
+.qsq.cur{ box-shadow:0 0 0 3px rgba(110,20,35,.45); border-color:var(--wine-2) }
+.qpanel-legend{ display:flex; flex-wrap:wrap; gap:6px 12px; margin-top:12px; font-size:11px; font-weight:700; color:var(--muted) }
+.qpanel-legend i{ display:inline-block; width:12px; height:12px; border-radius:4px; vertical-align:-2px; margin-left:5px; border:1.5px solid #dccfae; background:#fffdf8 }
+.qpanel-legend i.l-done{ background:var(--green); border-color:var(--green) }
+.qpanel-legend i.l-flag{ background:var(--gold-2); border-color:var(--gold) }
+.qpanel-legend i.l-cur{ border-color:var(--wine-2); box-shadow:0 0 0 2px rgba(110,20,35,.35) }
+.btn-flag{ background:var(--card); color:var(--wine-2); border:1.5px solid var(--gold); display:inline-flex; align-items:center; gap:6px }
+.btn-flag:hover:not(:disabled){ background:#fdf6e6 }
+.btn-flag.on{ background:var(--gold-2); color:var(--wine) }
+@media (max-width:1000px){
+  .quiz-layout{ grid-template-columns:1fr }
+  .qpanel{ position:static }
+  .qpanel-grid{ grid-template-columns:repeat(10,1fr) }
+}
+@media (max-width:640px){ .qpanel-grid{ grid-template-columns:repeat(6,1fr) } }
 
 /* ===== Question content: math typography + redrawn figures ===== */
 :root{
@@ -1017,10 +1059,12 @@ function renderQuizGeneric(mode, n){
       mode, n,
       idx: 0,
       answers: new Array(qcount).fill(null),
+      flags: new Array(qcount).fill(false),
       startTime: Date.now(),
       qcount,
     };
   }
+  if(!quizState.flags) quizState.flags = new Array(qcount).fill(false);
   let timerInterval = null;
   draw();
 
@@ -1033,6 +1077,10 @@ function renderQuizGeneric(mode, n){
       `<div class="qval"><span class="qval-label">${i===0?'القيمة الأولى':'القيمة الثانية'}</span><div class="qval-body">${v}</div></div>`
     ).join('')}</div>` : '';
     const figHtml = hasFig ? `<div class="qfig-wrap"><div class="qfig">${q.f}</div>${q.fc ? `<div class="qfig-cap">${q.fc}</div>` : ''}</div>` : '';
+    const doneN = quizState.answers.filter(Boolean).length;
+    const flagN = quizState.flags.filter(Boolean).length;
+    const sqs = sec.q.map((qq,i)=>`<button class="qsq${quizState.answers[i]?' done':''}${quizState.flags[i]?' flagged':''}${i===quizState.idx?' cur':''}" data-i="${i}" title="السؤال ${qq.n}">${qq.n}</button>`).join('');
+    const panelHtml = `<aside class="qpanel"><div class="qpanel-title"><span>الأسئلة</span><small>${qcount} سؤال</small></div><div class="qpanel-stats"><div class="qstat s-done"><b>${doneN}</b><span>محلول</span></div><div class="qstat s-todo"><b>${qcount-doneN}</b><span>لم يُحل</span></div><div class="qstat s-flag"><b>${flagN}</b><span>معلّم</span></div></div><div class="qpanel-grid">${sqs}</div><div class="qpanel-legend"><span><i class="l-done"></i>محلول</span><span><i></i>لم يُحل</span><span><i class="l-flag"></i>معلّم</span><span><i class="l-cur"></i>الحالي</span></div></aside>`;
     const chCls = 'choices' + (q.lc ? ' long' : '') + (q.sc ? ' pics' : '');
 
     app.innerHTML = `
@@ -1047,6 +1095,8 @@ function renderQuizGeneric(mode, n){
         </div>
         <div class="timer" id="timerBox">٠٠:٠٠</div>
       </div>
+      <div class="quiz-layout">
+      <div class="quiz-main">
       <div class="qcard">
         <div class="qhead"><span class="qnum-badge">${q.n}</span><div class="qtext">${q.h}</div></div>
         ${valsHtml}
@@ -1057,7 +1107,11 @@ function renderQuizGeneric(mode, n){
       </div>
       <div class="quiz-nav">
         <button class="btn btn-ghost" id="prevBtn" ${quizState.idx===0?'disabled':''}>السابق</button>
+        <button class="btn btn-flag${quizState.flags[quizState.idx]?' on':''}" id="flagBtn">\u2691 ${quizState.flags[quizState.idx]?'إلغاء التعليم':'علّم السؤال'}</button>
         <button class="btn btn-primary" id="nextBtn">${quizState.idx===qcount-1 ? cfg.finishLabel : 'التالي'}</button>
+      </div>
+      </div>
+      ${panelHtml}
       </div>
     `;
 
@@ -1079,6 +1133,14 @@ function renderQuizGeneric(mode, n){
       choicesBox.appendChild(btn);
     });
 
+    document.getElementById('flagBtn').addEventListener('click', ()=>{
+      quizState.flags[quizState.idx] = !quizState.flags[quizState.idx];
+      draw();
+    });
+    document.querySelectorAll('.qsq').forEach(b=> b.addEventListener('click', ()=>{
+      quizState.idx = +b.dataset.i; draw();
+      window.scrollTo({top:0,behavior:'smooth'});
+    }));
     document.getElementById('prevBtn').addEventListener('click', ()=>{
       quizState.idx = Math.max(0, quizState.idx-1);
       draw();
@@ -1167,14 +1229,14 @@ function renderResultGeneric(mode, n){
       <div class="review-ans">إجابتك: ${answers[i]||'-'} | الصحيحة: ${q.ans}</div>
     `;
     div.addEventListener('click', ()=>{
-      quizState = { mode, n, idx:i, answers: answers.slice(), startTime: Date.now()-((store[n]&&store[n].time||0)*1000), qcount };
+      quizState = { mode, n, idx:i, flags:new Array(qcount).fill(false), answers: answers.slice(), startTime: Date.now()-((store[n]&&store[n].time||0)*1000), qcount };
       location.hash = cfg.quizHash(n);
     });
     list.appendChild(div);
   });
 
   document.getElementById('retryBtn').addEventListener('click', ()=>{
-    quizState = { mode, n, idx:0, answers:new Array(qcount).fill(null), startTime: Date.now(), qcount };
+    quizState = { mode, n, idx:0, flags:new Array(qcount).fill(false), answers:new Array(qcount).fill(null), startTime: Date.now(), qcount };
     location.hash = cfg.quizHash(n);
   });
   document.getElementById('nextSecBtn').addEventListener('click', ()=>{
