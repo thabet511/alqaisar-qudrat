@@ -106,6 +106,7 @@ body{
 .brand-text{ display:flex; flex-direction:column; align-items:flex-start; line-height:1.2 }
 .brand-name{ font-family:'Aref Ruqaa','Cairo',Tahoma,sans-serif; font-weight:700; font-size:23px; letter-spacing:.5px; color:var(--gold-3) }
 .brand-sub{ font-size:13px; font-weight:700; color:var(--gold-3); opacity:.92; letter-spacing:.2px }
+.brand-phone{ font-size:14px; font-weight:900; color:#fff; letter-spacing:.3px; direction:ltr; display:inline-block; margin-top:1px }
 .trainer-pill{
   background:rgba(255,255,255,.1);
   border:1px solid rgba(217,179,92,.4);
@@ -151,7 +152,8 @@ body{
   font-family:'Aref Ruqaa','Cairo',Tahoma,sans-serif;
   font-size:30px; font-weight:700;
 }
-.register-card h1{ margin:0 0 8px; font-size:22px; font-family:'Aref Ruqaa','Cairo',Tahoma,sans-serif; color:var(--wine) }
+.register-card h1{ margin:0 0 4px; font-size:22px; font-family:'Aref Ruqaa','Cairo',Tahoma,sans-serif; color:var(--wine) }
+.register-phone{ margin:0 0 14px; font-size:16px; font-weight:900; color:var(--wine-2); direction:ltr; letter-spacing:.3px }
 .register-card p{ margin:0 0 20px; color:var(--muted); font-size:14px; line-height:1.6 }
 #registerForm{ display:flex; flex-direction:column; gap:12px }
 #registerForm input{
@@ -585,6 +587,7 @@ sup{ vertical-align:.62em; } sub{ vertical-align:-.3em; }
     <span class="brand-text">
       <span class="brand-name">القيصر</span>
       <span class="brand-sub">القدرات الكمية</span>
+      <span class="brand-phone">٠٥٦٦٢٧٢٦٣٥</span>
     </span>
   </button>
   <div class="topbar-right">
@@ -913,6 +916,7 @@ function renderRegister(){
       <div class="register-card">
         <div class="register-badge">ق</div>
         <h1>مرحبًا بك في القيصر</h1>
+        <div class="register-phone">٠٥٦٦٢٧٢٦٣٥</div>
         <p>قبل تبدأ التدريب على القدرات الكمية، سجّل اسمك حتى تتابع نتائجك.</p>
         <form id="registerForm">
           <input type="text" id="studentName" placeholder="اكتب اسمك هنا" autocomplete="name" maxlength="40" required>
