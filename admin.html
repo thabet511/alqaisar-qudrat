@@ -38,31 +38,7 @@
   --header-h:  60px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg:        #111016;
-    --surface:   #1c1b26;
-    --border:    #2d2b3d;
-    --fg:        #ece8ff;
-    --fg-muted:  #9490b5;
-    --sidebar-bg:#0d0c18;
-    --sidebar-fg:#c4bff5;
-    --sidebar-act:#4f46e5;
-    --indigo-lt: #1e1b4b;
-    --teal-lt:   #042f2e;
-    --amber-lt:  #292001;
-    --rose-lt:   #2d0516;
-    --emerald-lt:#022c22;
-    --sky-lt:    #082f49;
-    color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --bg:#111016; --surface:#1c1b26; --border:#2d2b3d; --fg:#ece8ff; --fg-muted:#9490b5;
-  --sidebar-bg:#0d0c18; --sidebar-fg:#c4bff5; --sidebar-act:#4f46e5;
-  --indigo-lt:#1e1b4b; --teal-lt:#042f2e; --amber-lt:#292001; --rose-lt:#2d0516; --emerald-lt:#022c22; --sky-lt:#082f49;
-  color-scheme: dark;
-}
+/* Light mode only — no dark mode */
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; font-family: 'Tajawal', system-ui, sans-serif; direction: rtl; }
@@ -185,6 +161,7 @@ body {
 .btn-teal    { background: var(--teal); color: #fff; }
 .btn-rose    { background: var(--rose); color: #fff; }
 .btn-amber   { background: var(--amber); color: #fff; }
+.btn-emerald { background: var(--emerald); color: #fff; }
 .btn-ghost   { background: transparent; color: var(--fg-muted); border: 1.5px solid var(--border); }
 .btn-ghost:hover { background: var(--bg); }
 .btn-sm { padding: 5px 10px; font-size: 12px; }
@@ -487,6 +464,7 @@ tr:hover td { background: var(--bg); }
         <span class="topbar-title" id="topbarTitle">لوحة المعلومات</span>
       </div>
       <div class="topbar-actions">
+        <button class="btn btn-emerald" onclick="openAddTestModal()" id="addTestBtn" style="display:none">📋 إضافة اختبار</button>
         <button class="btn btn-primary" onclick="openAddModal()" id="addBtn">➕ إضافة سؤال</button>
       </div>
     </div>
@@ -706,6 +684,41 @@ tr:hover td { background: var(--bg); }
   </div>
 </div>
 
+<!-- Add Full Test Modal -->
+<div class="modal-overlay" id="addTestModal">
+  <div class="modal" style="max-width:600px;">
+    <div class="modal-header">
+      <span class="modal-title">📋 إضافة اختبار كامل</span>
+      <button class="modal-close" onclick="closeModal('addTestModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-field">
+          <label>نوع الاختبار</label>
+          <select id="testType" onchange="onTestTypeChange()">
+            <option value="qd">قسم (أقسام)</option>
+            <option value="fq">الأكثر تكراراً</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>رقم الاختبار / القسم</label>
+          <input type="number" id="testNum" min="1" max="500" value="1">
+        </div>
+        <div class="form-field">
+          <label>عدد الأسئلة</label>
+          <input type="number" id="testQCount" min="1" max="60" value="11" onchange="buildTestQuestions()">
+        </div>
+      </div>
+      <button class="btn btn-ghost" onclick="buildTestQuestions()" style="margin-bottom:16px;">🔄 تحديث النموذج</button>
+      <div id="testQuestionsContainer" style="display:flex;flex-direction:column;gap:18px;max-height:55vh;overflow-y:auto;padding-left:4px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-emerald" onclick="saveFullTest()">💾 حفظ الاختبار كاملاً</button>
+      <button class="btn btn-ghost" onclick="closeModal('addTestModal')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
 <!-- Confirm Delete Modal -->
 <div class="modal-overlay" id="confirmModal">
   <div class="modal" style="max-width:400px;">
@@ -842,7 +855,9 @@ function showPage(name, el) {
   currentPage = name;
   const titles = { dashboard: 'لوحة المعلومات', sections: 'أسئلة الأقسام', freq: 'الأكثر تكراراً', settings: 'الإعدادات' };
   document.getElementById('topbarTitle').textContent = titles[name] || name;
-  document.getElementById('addBtn').style.display = (name === 'settings' || name === 'dashboard') ? 'none' : '';
+  const hideBtn = (name === 'settings' || name === 'dashboard');
+  document.getElementById('addBtn').style.display = hideBtn ? 'none' : '';
+  document.getElementById('addTestBtn').style.display = hideBtn ? 'none' : '';
   if (name === 'sections') loadSectionsTable();
   if (name === 'freq') loadFreqTable();
   if (name === 'dashboard') loadDashboard();
@@ -1104,6 +1119,95 @@ function onImgChange(e) {
     preview.style.display = 'block';
   };
   reader.readAsDataURL(file);
+}
+
+// ─────────────────────────────────────────
+// Add Full Test Modal
+// ─────────────────────────────────────────
+function openAddTestModal() {
+  document.getElementById('testType').value = currentPage === 'freq' ? 'fq' : 'qd';
+  onTestTypeChange();
+  buildTestQuestions();
+  openModal('addTestModal');
+}
+
+function onTestTypeChange() {
+  const type = document.getElementById('testType').value;
+  document.getElementById('testNum').max = type === 'fq' ? settings.freq : settings.sections;
+  const defaultCount = type === 'fq' ? 50 : 11;
+  document.getElementById('testQCount').value = defaultCount;
+  buildTestQuestions();
+}
+
+function buildTestQuestions() {
+  const count = parseInt(document.getElementById('testQCount').value) || 11;
+  const container = document.getElementById('testQuestionsContainer');
+  const letters = ['أ','ب','ج','د'];
+  let html = '';
+  for (let i = 1; i <= count; i++) {
+    html += `<div class="test-q-block" style="border:1px solid var(--border);border-radius:10px;padding:16px;background:var(--bg);">
+      <div style="font-weight:700;color:var(--indigo);margin-bottom:12px;">السؤال ${toArab(i)}</div>
+      <div class="form-field" style="margin-bottom:10px;">
+        <label>نص السؤال</label>
+        <textarea id="tq_h_${i}" rows="2" placeholder="اكتب نص السؤال..."></textarea>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+        ${letters.map((l,j)=>`<div class="choice-item"><div class="choice-letter" style="background:var(--indigo-lt);color:var(--indigo);min-width:28px;text-align:center;border-radius:6px;padding:4px 8px;">${l}</div><input type="text" id="tq_c${j}_${i}" placeholder="الخيار ${l}"></div>`).join('')}
+      </div>
+      <div class="form-row" style="gap:10px;">
+        <div class="form-field">
+          <label>الإجابة الصحيحة</label>
+          <select id="tq_ans_${i}">
+            ${letters.map(l=>`<option value="${l}">${l}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-field">
+          <label>صورة السؤال (اختياري)</label>
+          <input type="file" id="tq_img_${i}" accept="image/*" style="font-size:13px;padding:4px;">
+        </div>
+      </div>
+    </div>`;
+  }
+  container.innerHTML = html;
+}
+
+async function saveFullTest() {
+  const type = document.getElementById('testType').value;
+  const section = parseInt(document.getElementById('testNum').value);
+  const count = parseInt(document.getElementById('testQCount').value) || 11;
+  let added = 0;
+  for (let i = 1; i <= count; i++) {
+    const h = (document.getElementById(`tq_h_${i}`)?.value || '').trim();
+    if (!h) continue;
+    const choices = [0,1,2,3].map(j => (document.getElementById(`tq_c${j}_${i}`)?.value || '').trim());
+    const ans = document.getElementById(`tq_ans_${i}`)?.value || 'أ';
+    const imgFile = document.getElementById(`tq_img_${i}`)?.files?.[0];
+    let imgDataUrl = null;
+    if (imgFile) {
+      imgDataUrl = await new Promise(res => {
+        const r = new FileReader();
+        r.onload = e => res(e.target.result);
+        r.readAsDataURL(imgFile);
+      });
+    }
+    const q = {
+      id: `q_${Date.now()}_${i}`,
+      type, section, n: i, ans, h, choices,
+      f: '', fc: '',
+      imgDataUrl, hasImg: !!imgDataUrl,
+      updatedAt: Date.now()
+    };
+    // Remove existing question with same type/section/n
+    localQuestions = localQuestions.filter(x => !(x.type===type && x.section===section && x.n===i));
+    localQuestions.push(q);
+    added++;
+  }
+  save();
+  closeModal('addTestModal');
+  if (currentPage === 'sections') loadSectionsTable();
+  if (currentPage === 'freq') loadFreqTable();
+  loadDashboard();
+  toast(`تم إضافة ${toArab(added)} سؤال ✅`, 'success');
 }
 
 function onQTypeChange() {
