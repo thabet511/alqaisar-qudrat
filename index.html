@@ -520,23 +520,27 @@ sup{ vertical-align:.62em; } sub{ vertical-align:-.3em; }
   border:1px solid rgba(217,179,92,.3);
 }
 .dash-hero-trainer{
-  text-align:center; margin: 14px 0 10px;
+  display:flex; align-items:center; justify-content:center;
+  gap:18px; margin: 16px 0 14px; flex-wrap:wrap;
 }
 .dash-trainer-photo{
-  width:130px; height:130px; border-radius:50%;
-  border:4px solid var(--gold);
-  object-fit:cover; display:block; margin:0 auto;
-  box-shadow:0 6px 24px rgba(0,0,0,.5);
+  width:200px; height:200px; border-radius:50%;
+  border:5px solid var(--gold);
+  object-fit:cover; flex-shrink:0;
+  box-shadow:0 8px 36px rgba(0,0,0,.65);
+}
+.dash-platform-info{
+  display:flex; flex-direction:column; gap:6px; text-align:right;
 }
 .dash-platform-title{
-  text-align:center; color:var(--gold);
-  font-size:28px; font-weight:900; letter-spacing:2px;
-  margin: 8px 0 4px; text-shadow:0 2px 8px rgba(0,0,0,.4);
-  font-family: 'Cairo', sans-serif;
+  color:var(--gold);
+  font-size:52px; font-weight:900; letter-spacing:2px;
+  text-shadow:0 3px 14px rgba(0,0,0,.5);
+  font-family: 'Aref Ruqaa','Cairo', sans-serif; line-height:1.0;
 }
 .dash-platform-sub{
-  text-align:center; color:rgba(217,179,92,.7);
-  font-size:13px; margin-bottom:14px;
+  color:rgba(217,179,92,.85);
+  font-size:22px; font-weight:700; letter-spacing:.5px;
 }
 .dash-stats{
   display:grid; grid-template-columns:repeat(4,1fr); gap:10px;
@@ -1069,25 +1073,43 @@ function clearStudent(){
 }
 let student = loadStudent();
 
-const TOTAL_SECTIONS = (typeof QUESTIONS_SECTION_COUNT !== 'undefined') ? QUESTIONS_SECTION_COUNT : 120;
+// ── Admin-override layer ────────────────────────────────────────────────────
+// Admin dashboard writes to localStorage with keys:
+//   qaisar_admin_qd_N  →  JSON section object  (overrides embedded qd-N)
+//   qaisar_admin_fq_N  →  JSON freq-test object (overrides embedded fq-N)
+//   qaisar_admin_section_count  →  number (overrides QUESTIONS_SECTION_COUNT)
+//   qaisar_admin_freq_count     →  number (overrides QUESTIONS_FREQ_TEST_COUNT)
+function adminGet(key){ try{ const v=localStorage.getItem(key); return v?JSON.parse(v):null; }catch(e){ return null; } }
+
+// Override section/freq counts from admin if set
+const _adminSC = adminGet('qaisar_admin_section_count');
+const _adminFC = adminGet('qaisar_admin_freq_count');
+
+const TOTAL_SECTIONS = _adminSC || ((typeof QUESTIONS_SECTION_COUNT !== 'undefined') ? QUESTIONS_SECTION_COUNT : 121);
 const sectionCache = {};
 function getSection(n){
   if(sectionCache[n]) return sectionCache[n];
+  // Check admin override first
+  const adminSec = adminGet('qaisar_admin_qd_'+n);
+  if(adminSec){ sectionCache[n]=adminSec; return adminSec; }
   const el = document.getElementById('qd-'+n);
   if(!el) return null;
   let sec;
   try{ sec = JSON.parse(el.textContent); }catch(e){ return null; }
   sectionCache[n] = sec;
-  // free the raw text now that it's parsed & cached, to reduce retained memory
   el.textContent = '';
   return sec;
 }
 
-const TOTAL_FREQ_TESTS = (typeof QUESTIONS_FREQ_TEST_COUNT !== 'undefined') ? QUESTIONS_FREQ_TEST_COUNT : 30;
+const _adminFC2 = adminGet('qaisar_admin_freq_count');
+const TOTAL_FREQ_TESTS = _adminFC2 || ((typeof QUESTIONS_FREQ_TEST_COUNT !== 'undefined') ? QUESTIONS_FREQ_TEST_COUNT : 30);
 const FREQ_COUNTS = (typeof QUESTIONS_FREQ_COUNTS !== 'undefined') ? QUESTIONS_FREQ_COUNTS : [];
 const freqCache = {};
 function getFreqTest(n){
   if(freqCache[n]) return freqCache[n];
+  // Check admin override first
+  const adminFq = adminGet('qaisar_admin_fq_'+n);
+  if(adminFq){ freqCache[n]=adminFq; return adminFq; }
   const el = document.getElementById('fq-'+n);
   if(!el) return null;
   let t;
@@ -1242,9 +1264,11 @@ function renderHome(){
       </div>
       <div class="dash-hero-trainer">
         <img src="${TRAINER_PHOTO_URI}" alt="المدرب حسام بدران" class="dash-trainer-photo">
+        <div class="dash-platform-info">
+          <div class="dash-platform-title">القيصر</div>
+          <div class="dash-platform-sub">في القدرات الكمية</div>
+        </div>
       </div>
-      <div class="dash-platform-title">القيصر</div>
-      <div class="dash-platform-sub">في القدرات الكمية</div>
       <div class="dash-stats">
         <div class="dash-stat-card">
           <div class="dash-stat-num">${doneCount}</div>
@@ -1353,9 +1377,11 @@ function renderFreqHome(){
       </div>
       <div class="dash-hero-trainer">
         <img src="${TRAINER_PHOTO_URI}" alt="المدرب حسام بدران" class="dash-trainer-photo">
+        <div class="dash-platform-info">
+          <div class="dash-platform-title">القيصر</div>
+          <div class="dash-platform-sub">في القدرات الكمية</div>
+        </div>
       </div>
-      <div class="dash-platform-title">القيصر</div>
-      <div class="dash-platform-sub">في القدرات الكمية</div>
       <div class="dash-stats">
         <div class="dash-stat-card">
           <div class="dash-stat-num">${doneCount}</div>
