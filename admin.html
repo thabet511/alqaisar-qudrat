@@ -444,6 +444,10 @@ tr:hover td { background: var(--bg); }
       <div class="nav-item" onclick="showPage('freq', this)">
         <span class="nav-icon">🔁</span> الأكثر تكراراً
       </div>
+      <div class="nav-section-title">تعديل المحتوى</div>
+      <div class="nav-item" onclick="showPage('platform', this)">
+        <span class="nav-icon">✏️</span> تعديل أقسام المنصة
+      </div>
       <div class="nav-section-title">الإعدادات</div>
       <div class="nav-item" onclick="showPage('settings', this)">
         <span class="nav-icon">⚙️</span> إعدادات عامة
@@ -559,6 +563,41 @@ tr:hover td { background: var(--bg); }
             </table>
           </div>
           <div class="pagination" id="freqPagination"></div>
+        </div>
+      </div>
+
+      <!-- Platform Edit Page -->
+      <div class="page" id="page-platform">
+        <div class="table-card" style="max-width:660px;margin-bottom:18px;">
+          <div class="table-toolbar">
+            <span class="table-title">✏️ تعديل أقسام المنصة</span>
+          </div>
+          <div style="padding:18px;display:flex;flex-direction:column;gap:14px;">
+            <p style="font-size:13px;color:var(--fg-muted);">اختر النوع والرقم لتحميل الأسئلة من المنصة وتعديلها. التعديلات تُحفظ في المتصفح وتُطبَّق على المنصة تلقائياً.</p>
+            <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+              <div class="form-field">
+                <label>النوع</label>
+                <select id="platMode" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;">
+                  <option value="qd">قسم</option>
+                  <option value="fq">الأكثر تكراراً</option>
+                </select>
+              </div>
+              <div class="form-field" style="flex:1;min-width:120px;">
+                <label>الرقم</label>
+                <input type="number" id="platSecNum" min="1" max="200" value="1">
+              </div>
+              <button class="btn btn-primary" onclick="loadPlatformSection()">📥 تحميل الأسئلة</button>
+              <button class="btn btn-ghost" onclick="resetPlatformSection()" style="color:var(--rose);border-color:var(--rose);">↩️ استعادة الأصلي</button>
+            </div>
+            <div id="platStatus" style="font-size:13px;color:var(--fg-muted);min-height:18px;"></div>
+          </div>
+        </div>
+        <div id="platQuestionsContainer" style="display:flex;flex-direction:column;gap:16px;"></div>
+        <div id="platSaveBar" style="display:none;position:sticky;bottom:16px;margin-top:16px;">
+          <div style="background:var(--indigo);color:#fff;border-radius:10px;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow-md);">
+            <span id="platSaveLabel" style="font-weight:600;"></span>
+            <button class="btn" style="background:#fff;color:var(--indigo);font-weight:700;" onclick="savePlatformSection()">💾 حفظ التعديلات</button>
+          </div>
         </div>
       </div>
 
@@ -854,9 +893,9 @@ function showPage(name, el) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
   currentPage = name;
-  const titles = { dashboard: 'لوحة المعلومات', sections: 'أسئلة الأقسام', freq: 'الأكثر تكراراً', settings: 'الإعدادات' };
+  const titles = { dashboard: 'لوحة المعلومات', sections: 'أسئلة الأقسام', freq: 'الأكثر تكراراً', settings: 'الإعدادات', platform: 'تعديل أقسام المنصة' };
   document.getElementById('topbarTitle').textContent = titles[name] || name;
-  const hideBtn = (name === 'settings' || name === 'dashboard');
+  const hideBtn = (name === 'settings' || name === 'dashboard' || name === 'platform');
   document.getElementById('addBtn').style.display = hideBtn ? 'none' : '';
   document.getElementById('addTestBtn').style.display = hideBtn ? 'none' : '';
   if (name === 'sections') loadSectionsTable();
@@ -1137,6 +1176,157 @@ function clearImg() {
   preview.src = '';
   preview.style.display = 'none';
   document.getElementById('clearImgBtn').style.display = 'none';
+}
+
+// ─────────────────────────────────────────
+// Platform Section Editor
+// ─────────────────────────────────────────
+let platCurrentSection = null; // { n, q:[...] } — working copy
+
+// ── helpers for platform fetch ──────────────────────────────
+function fetchPlatSection(n) {
+  // Fetch index.html raw text and extract JSON from <script id="qd-N">
+  return fetch(window.location.origin + '/index.html', { cache: 'no-store' })
+    .then(r => { if (!r.ok) throw new Error('http ' + r.status); return r.text(); })
+    .then(txt => {
+      const re = new RegExp('<script[^>]+id="qd-' + n + '"[^>]*>([\s\S]*?)<\/script>', 'i');
+      const m = txt.match(re);
+      if (!m) throw new Error('NOT_FOUND');
+      return JSON.parse(m[1].trim());
+    });
+}
+function fetchPlatFreq(n) {
+  return fetch(window.location.origin + '/index.html', { cache: 'no-store' })
+    .then(r => { if (!r.ok) throw new Error('http ' + r.status); return r.text(); })
+    .then(txt => {
+      const re = new RegExp('<script[^>]+id="fq-' + n + '"[^>]*>([\s\S]*?)<\/script>', 'i');
+      const m = txt.match(re);
+      if (!m) throw new Error('NOT_FOUND');
+      return JSON.parse(m[1].trim());
+    });
+}
+
+let platMode = 'qd'; // 'qd' or 'fq'
+
+function loadPlatformSection() {
+  const n = parseInt(document.getElementById('platSecNum').value);
+  if (!n || n < 1) { toast('أدخل رقم صحيح', 'error'); return; }
+  platMode = document.getElementById('platMode').value;
+
+  const overrideKey = 'qaisar_admin_' + platMode + '_' + n;
+  let saved = null;
+  try { const v = localStorage.getItem(overrideKey); if (v) saved = JSON.parse(v); } catch(e) {}
+
+  const status = document.getElementById('platStatus');
+  status.textContent = '⏳ جاري التحميل...';
+
+  const fetchFn = platMode === 'fq' ? fetchPlatFreq(n) : fetchPlatSection(n);
+  fetchFn
+    .then(sec => {
+      platCurrentSection = saved ? JSON.parse(JSON.stringify(saved)) : JSON.parse(JSON.stringify(sec));
+      platCurrentSection._origN = n;
+      platCurrentSection._mode = platMode;
+      // ensure section has n field
+      if (!platCurrentSection.n) platCurrentSection.n = n;
+      status.textContent = saved
+        ? '✅ ' + (platMode==='fq'?'اختبار التكرار':'القسم') + ' ' + n + ' — نسخة معدّلة محفوظة مسبقاً'
+        : '✅ تم تحميل ' + (platMode==='fq'?'اختبار التكرار':'القسم') + ' ' + n + ' (' + sec.q.length + ' سؤال)';
+      renderPlatformQuestions();
+      toast('تم التحميل ✅', 'success');
+    })
+    .catch(e => {
+      if (e.message === 'NOT_FOUND') {
+        status.textContent = '⚠️ ' + (platMode==='fq'?'اختبار التكرار':'القسم') + ' ' + n + ' غير موجود في المنصة.';
+      } else {
+        status.textContent = '❌ تعذّر التحميل: ' + e.message;
+      }
+      toast('تعذّر التحميل', 'error');
+    });
+}
+
+function renderPlatformQuestions() {
+  const container = document.getElementById('platQuestionsContainer');
+  const saveBar = document.getElementById('platSaveBar');
+  const saveLabel = document.getElementById('platSaveLabel');
+  if (!platCurrentSection) { container.innerHTML = ''; saveBar.style.display = 'none'; return; }
+
+  const letters = ['أ','ب','ج','د'];
+  const choiceColors = ['indigo','teal','amber','rose'];
+
+  container.innerHTML = platCurrentSection.q.map((q, qi) => `
+    <div class="table-card" style="padding:18px;" id="platQ_${qi}">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+        <span class="badge badge-indigo">سؤال ${toArab(q.n)}</span>
+        <span class="badge badge-emerald">الإجابة: ${q.ans}</span>
+        ${q.f ? '<span class="badge badge-amber">📐 شكل</span>' : ''}
+      </div>
+      <div class="form-field" style="margin-bottom:12px;">
+        <label>نص السؤال</label>
+        <textarea rows="3" id="plat_h_${qi}" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:14px;resize:vertical;">${escHtml(q.h)}</textarea>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+        ${q.c.map((c, ci) => `
+          <div style="display:flex;gap:8px;align-items:center;">
+            <div class="choice-letter" style="background:var(--${choiceColors[ci]}-lt);color:var(--${choiceColors[ci]});flex-shrink:0;">${letters[ci]}</div>
+            <input type="text" id="plat_c${ci}_${qi}" value="${escHtml(c)}" style="flex:1;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:14px;">
+          </div>
+        `).join('')}
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <div class="form-field" style="flex:0 0 auto;">
+          <label>الإجابة</label>
+          <select id="plat_ans_${qi}" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;">
+            ${letters.map(l => `<option value="${l}" ${q.ans===l?'selected':''}>${l}</option>`).join('')}
+          </select>
+        </div>
+        ${q.f ? `<div class="form-field" style="flex:1;">
+          <label>SVG الشكل</label>
+          <textarea rows="2" id="plat_f_${qi}" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:12px;resize:vertical;">${escHtml(q.f)}</textarea>
+        </div>` : ''}
+      </div>
+    </div>
+  `).join('');
+
+  saveLabel.textContent = 'تعديل القسم ' + toArab(platCurrentSection.n) + ' — ' + toArab(platCurrentSection.q.length) + ' سؤال';
+  saveBar.style.display = 'block';
+}
+
+function savePlatformSection() {
+  if (!platCurrentSection) return;
+  const letters = ['أ','ب','ج','د'];
+  // Collect current values from inputs
+  platCurrentSection.q = platCurrentSection.q.map((q, qi) => {
+    const h = document.getElementById('plat_h_' + qi)?.value.trim() || q.h;
+    const ans = document.getElementById('plat_ans_' + qi)?.value || q.ans;
+    const c = [0,1,2,3].map(ci => document.getElementById('plat_c' + ci + '_' + qi)?.value.trim() || q.c[ci]);
+    const fEl = document.getElementById('plat_f_' + qi);
+    const f = fEl ? (fEl.value.trim() || q.f) : q.f;
+    return { ...q, h, ans, c, ...(f !== undefined ? {f} : {}) };
+  });
+
+  const mode = platCurrentSection._mode || 'qd';
+  const key = 'qaisar_admin_' + mode + '_' + platCurrentSection._origN;
+  try {
+    localStorage.setItem(key, JSON.stringify(platCurrentSection));
+    document.getElementById('platStatus').textContent = '✅ تم حفظ التعديلات للقسم ' + platCurrentSection.n + ' — ستُطبَّق على المنصة تلقائياً.';
+    toast('تم حفظ القسم ' + platCurrentSection.n + ' ✅', 'success');
+  } catch(e) {
+    toast('فشل الحفظ — المتصفح ممتلئ؟', 'error');
+  }
+}
+
+function resetPlatformSection() {
+  const n = parseInt(document.getElementById('platSecNum').value);
+  const mode = document.getElementById('platMode')?.value || 'qd';
+  if (!n) return;
+  const key = 'qaisar_admin_' + mode + '_' + n;
+  localStorage.removeItem(key);
+  platCurrentSection = null;
+  document.getElementById('platQuestionsContainer').innerHTML = '';
+  document.getElementById('platSaveBar').style.display = 'none';
+  const label = mode === 'fq' ? 'اختبار التكرار' : 'القسم';
+  document.getElementById('platStatus').textContent = '↩️ تم حذف التعديلات للـ' + label + ' ' + n + ' — استُعيد الأصلي.';
+  toast('تم استعادة الأصلي ✅', 'success');
 }
 
 // ─────────────────────────────────────────
