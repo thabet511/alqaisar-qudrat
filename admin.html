@@ -1181,48 +1181,24 @@ let platCurrentSection = null; // { n, q:[...] } — working copy
 
 // ── helpers: read section data from localStorage cache ────────
 // index.html saves each section to qaisar_orig_qd_N / qaisar_orig_fq_N
-// when a user opens any quiz page. Admin reads from there.
+// when a user opens any quiz page. Admin reads ONLY from there —
+// no network fetch, no regex over raw HTML, no risk of corruption.
 function fetchPlatSection(n) {
   return new Promise((resolve, reject) => {
-    // 1. Try original cache (written by index.html on quiz open)
     try {
       const raw = localStorage.getItem('qaisar_orig_qd_' + n);
       if (raw) { resolve(JSON.parse(raw)); return; }
     } catch(e) {}
-    // 2. Fall back: fetch index.html text and extract JSON
-    fetch(window.location.origin + '/', { cache: 'no-store' })
-      .then(r => r.text())
-      .then(txt => {
-        const re = new RegExp('<script[^>]+id="qd-' + n + '"[^>]*>([\\s\\S]*?)<\\/script>', 'i');
-        const m = txt.match(re);
-        if (!m || !m[1].trim()) throw new Error('NOT_FOUND');
-        const sec = JSON.parse(m[1].trim());
-        // Save to cache for next time
-        try { localStorage.setItem('qaisar_orig_qd_' + n, JSON.stringify(sec)); } catch(e) {}
-        resolve(sec);
-      })
-      .catch(e => reject(new Error(e.message === 'NOT_FOUND' ? 'NOT_FOUND' : 'LOAD_ERROR')));
+    reject(new Error('NOT_FOUND'));
   });
 }
 function fetchPlatFreq(n) {
   return new Promise((resolve, reject) => {
-    // 1. Try original cache
     try {
       const raw = localStorage.getItem('qaisar_orig_fq_' + n);
       if (raw) { resolve(JSON.parse(raw)); return; }
     } catch(e) {}
-    // 2. Fall back: fetch index.html text and extract JSON
-    fetch(window.location.origin + '/', { cache: 'no-store' })
-      .then(r => r.text())
-      .then(txt => {
-        const re = new RegExp('<script[^>]+id="fq-' + n + '"[^>]*>([\\s\\S]*?)<\\/script>', 'i');
-        const m = txt.match(re);
-        if (!m || !m[1].trim()) throw new Error('NOT_FOUND');
-        const t = JSON.parse(m[1].trim());
-        try { localStorage.setItem('qaisar_orig_fq_' + n, JSON.stringify(t)); } catch(e) {}
-        resolve(t);
-      })
-      .catch(e => reject(new Error(e.message === 'NOT_FOUND' ? 'NOT_FOUND' : 'LOAD_ERROR')));
+    reject(new Error('NOT_FOUND'));
   });
 }
 
@@ -1399,123 +1375,6 @@ function openAddTestModal() {
   buildTestQuestions();
   openModal('addTestModal');
 }
-
-function onTestTypeChange() {
-  const type = document.getElementById('testType').value;
-  document.getElementById('testNum').max = type === 'fq' ? settings.freq : settings.sections;
-  const defaultCount = type === 'fq' ? 50 : 11;
-  document.getElementById('testQCount').value = defaultCount;
-  buildTestQuestions();
-}
-
-function buildTestQuestions() {
-  const count = parseInt(document.getElementById('testQCount').value) || 11;
-  const container = document.getElementById('testQuestionsContainer');
-  const letters = ['أ','ب','ج','د'];
-  let html = '';
-  for (let i = 1; i <= count; i++) {
-    html += `<div class="test-q-block" style="border:1px solid var(--border);border-radius:10px;padding:16px;background:var(--bg);">
-      <div style="font-weight:700;color:var(--indigo);margin-bottom:12px;">السؤال ${toArab(i)}</div>
-      <div class="form-field" style="margin-bottom:10px;">
-        <label>نص السؤال</label>
-        <textarea id="tq_h_${i}" rows="2" placeholder="اكتب نص السؤال..."></textarea>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
-        ${letters.map((l,j)=>`<div class="choice-item"><div class="choice-letter" style="background:var(--indigo-lt);color:var(--indigo);min-width:28px;text-align:center;border-radius:6px;padding:4px 8px;">${l}</div><input type="text" id="tq_c${j}_${i}" placeholder="الخيار ${l}"></div>`).join('')}
-      </div>
-      <div class="form-row" style="gap:10px;">
-        <div class="form-field">
-          <label>الإجابة الصحيحة</label>
-          <select id="tq_ans_${i}">
-            ${letters.map(l=>`<option value="${l}">${l}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-field">
-          <label>صورة السؤال (اختياري)</label>
-          <input type="file" id="tq_img_${i}" accept="image/*" style="font-size:13px;padding:4px;">
-        </div>
-      </div>
-    </div>`;
-  }
-  container.innerHTML = html;
-}
-
-async function saveFullTest() {
-  const type = document.getElementById('testType').value;
-  const section = parseInt(document.getElementById('testNum').value);
-  const count = parseInt(document.getElementById('testQCount').value) || 11;
-  let added = 0;
-  for (let i = 1; i <= count; i++) {
-    const h = (document.getElementById(`tq_h_${i}`)?.value || '').trim();
-    if (!h) continue;
-    const choices = [0,1,2,3].map(j => (document.getElementById(`tq_c${j}_${i}`)?.value || '').trim());
-    const ans = document.getElementById(`tq_ans_${i}`)?.value || 'أ';
-    const imgFile = document.getElementById(`tq_img_${i}`)?.files?.[0];
-    let imgDataUrl = null;
-    if (imgFile) {
-      imgDataUrl = await new Promise(res => {
-        const r = new FileReader();
-        r.onload = e => res(e.target.result);
-        r.readAsDataURL(imgFile);
-      });
-    }
-    const q = {
-      id: `q_${Date.now()}_${i}`,
-      type, section, n: i, ans, h, choices,
-      f: '', fc: '',
-      imgDataUrl, hasImg: !!imgDataUrl,
-      updatedAt: Date.now()
-    };
-    // Remove existing question with same type/section/n
-    localQuestions = localQuestions.filter(x => !(x.type===type && x.section===section && x.n===i));
-    localQuestions.push(q);
-    added++;
-  }
-  save();
-  closeModal('addTestModal');
-  if (currentPage === 'sections') loadSectionsTable();
-  if (currentPage === 'freq') loadFreqTable();
-  loadDashboard();
-  toast(`تم إضافة ${toArab(added)} سؤال ✅`, 'success');
-}
-
-function onQTypeChange() {
-  const type = document.getElementById('qType').value;
-  document.getElementById('qSectionNum').max = type === 'fq' ? settings.freq : settings.sections;
-}
-
-// ─────────────────────────────────────────
-// Modal helpers
-// ─────────────────────────────────────────
-function openModal(id) {
-  document.getElementById(id).classList.add('open');
-}
-function closeModal(id) {
-  document.getElementById(id).classList.remove('open');
-}
-document.querySelectorAll('.modal-overlay').forEach(overlay => {
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
-});
-
-// ─────────────────────────────────────────
-// Toast
-// ─────────────────────────────────────────
-function toast(msg, type = '') {
-  const wrap = document.getElementById('toastWrap');
-  const el = document.createElement('div');
-  el.className = 'toast ' + type;
-  el.textContent = msg;
-  wrap.appendChild(el);
-  setTimeout(() => el.remove(), 3000);
-}
-
-// ─────────────────────────────────────────
-// Utilities
-// ─────────────────────────────────────────
-const arabNums = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
-function toArab(n) { return String(n).replace(/\d/g, d => arabNums[d]); }
-function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-</script>
 
 function onTestTypeChange() {
   const type = document.getElementById('testType').value;
