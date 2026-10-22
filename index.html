@@ -1133,6 +1133,21 @@ function getFreqTest(n){
   return t;
 }
 
+// Pre-cache ALL sections + freq-tests in the background so the admin
+// panel can edit ANY of them after just one visit to this homepage —
+// no need to open every single section manually first.
+function primeAdminCache(){
+  try{
+    for(let i=1;i<=TOTAL_SECTIONS;i++){ getSection(i); }
+    for(let i=1;i<=TOTAL_FREQ_TESTS;i++){ getFreqTest(i); }
+  }catch(e){}
+}
+if('requestIdleCallback' in window){
+  requestIdleCallback(primeAdminCache, {timeout:6000});
+}else{
+  setTimeout(primeAdminCache, 1200);
+}
+
 /* ---------------- shared config: section ("القسم") vs frequent-test ("الأكثر تكرارًا") ---------------- */
 const MODES = {
   sec: {
