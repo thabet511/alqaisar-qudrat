@@ -821,6 +821,7 @@ function doLogin() {
   const p = document.getElementById('loginPass').value;
   const err = document.getElementById('loginError');
   if (p === CREDS.pass) {
+    try { localStorage.setItem('qaisar_admin_session', '1'); } catch(e){}
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
     initApp();
@@ -830,11 +831,21 @@ function doLogin() {
   }
 }
 function doLogout() {
+  try { localStorage.removeItem('qaisar_admin_session'); } catch(e){}
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('loginPass').value = '';
 }
 document.getElementById('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+// Stay logged in across page reloads/visits until explicit logout
+try {
+  if (localStorage.getItem('qaisar_admin_session') === '1') {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    initApp();
+  }
+} catch(e){}
 
 // ─────────────────────────────────────────
 // Init
@@ -1216,22 +1227,33 @@ function loadPlatformSection() {
   const status = document.getElementById('platStatus');
   status.textContent = '⏳ جاري التحميل...';
 
+  // If an edited version is already saved, use it directly — no need
+  // for the original cache to exist at all.
+  if (saved) {
+    platCurrentSection = JSON.parse(JSON.stringify(saved));
+    platCurrentSection._origN = n;
+    platCurrentSection._mode = platMode;
+    if (!platCurrentSection.n) platCurrentSection.n = n;
+    status.textContent = '✅ ' + (platMode==='fq'?'اختبار التكرار':'القسم') + ' ' + n + ' — نسخة معدّلة محفوظة مسبقاً';
+    renderPlatformQuestions();
+    toast('تم التحميل ✅', 'success');
+    return;
+  }
+
   const fetchFn = platMode === 'fq' ? fetchPlatFreq(n) : fetchPlatSection(n);
   fetchFn
     .then(sec => {
-      platCurrentSection = saved ? JSON.parse(JSON.stringify(saved)) : JSON.parse(JSON.stringify(sec));
+      platCurrentSection = JSON.parse(JSON.stringify(sec));
       platCurrentSection._origN = n;
       platCurrentSection._mode = platMode;
       if (!platCurrentSection.n) platCurrentSection.n = n;
-      status.textContent = saved
-        ? '✅ ' + (platMode==='fq'?'اختبار التكرار':'القسم') + ' ' + n + ' — نسخة معدّلة محفوظة مسبقاً'
-        : '✅ تم تحميل ' + (platMode==='fq'?'اختبار التكرار':'القسم') + ' ' + n + ' (' + sec.q.length + ' سؤال)';
+      status.textContent = '✅ تم تحميل ' + (platMode==='fq'?'اختبار التكرار':'القسم') + ' ' + n + ' (' + sec.q.length + ' سؤال)';
       renderPlatformQuestions();
       toast('تم التحميل ✅', 'success');
     })
     .catch(e => {
       if (e.message === 'NOT_FOUND') {
-        status.textContent = '⚠️ ' + (platMode==='fq'?'اختبار التكرار':'القسم') + ' ' + n + ' غير موجود. افتح المنصة وادخل هذا القسم أولاً.';
+        status.textContent = '⚠️ ' + (platMode==='fq'?'اختبار التكرار':'القسم') + ' ' + n + ' غير موجود — افتح المنصة الرئيسية مرة واحدة ثم ارجع هنا (يتم تخزين كل الأقسام تلقائياً بالخلفية).';
       } else {
         status.textContent = '❌ تعذّر التحميل: ' + e.message;
       }
