@@ -1183,27 +1183,51 @@ function clearImg() {
 // ─────────────────────────────────────────
 let platCurrentSection = null; // { n, q:[...] } — working copy
 
-// ── helpers for platform fetch ──────────────────────────────
+// ── helpers: read section data from localStorage cache ────────
+// index.html saves each section to qaisar_orig_qd_N / qaisar_orig_fq_N
+// when a user opens any quiz page. Admin reads from there.
 function fetchPlatSection(n) {
-  // Fetch index.html raw text and extract JSON from <script id="qd-N">
-  return fetch(window.location.origin + '/index.html', { cache: 'no-store' })
-    .then(r => { if (!r.ok) throw new Error('http ' + r.status); return r.text(); })
-    .then(txt => {
-      const re = new RegExp('<script[^>]+id="qd-' + n + '"[^>]*>([\s\S]*?)<\/script>', 'i');
-      const m = txt.match(re);
-      if (!m) throw new Error('NOT_FOUND');
-      return JSON.parse(m[1].trim());
-    });
+  return new Promise((resolve, reject) => {
+    // 1. Try original cache (written by index.html on quiz open)
+    try {
+      const raw = localStorage.getItem('qaisar_orig_qd_' + n);
+      if (raw) { resolve(JSON.parse(raw)); return; }
+    } catch(e) {}
+    // 2. Fall back: fetch index.html text and extract JSON
+    fetch(window.location.origin + '/', { cache: 'no-store' })
+      .then(r => r.text())
+      .then(txt => {
+        const re = new RegExp('<script[^>]+id="qd-' + n + '"[^>]*>([\\s\\S]*?)<\\/script>', 'i');
+        const m = txt.match(re);
+        if (!m || !m[1].trim()) throw new Error('NOT_FOUND');
+        const sec = JSON.parse(m[1].trim());
+        // Save to cache for next time
+        try { localStorage.setItem('qaisar_orig_qd_' + n, JSON.stringify(sec)); } catch(e) {}
+        resolve(sec);
+      })
+      .catch(e => reject(new Error(e.message === 'NOT_FOUND' ? 'NOT_FOUND' : 'LOAD_ERROR')));
+  });
 }
 function fetchPlatFreq(n) {
-  return fetch(window.location.origin + '/index.html', { cache: 'no-store' })
-    .then(r => { if (!r.ok) throw new Error('http ' + r.status); return r.text(); })
-    .then(txt => {
-      const re = new RegExp('<script[^>]+id="fq-' + n + '"[^>]*>([\s\S]*?)<\/script>', 'i');
-      const m = txt.match(re);
-      if (!m) throw new Error('NOT_FOUND');
-      return JSON.parse(m[1].trim());
-    });
+  return new Promise((resolve, reject) => {
+    // 1. Try original cache
+    try {
+      const raw = localStorage.getItem('qaisar_orig_fq_' + n);
+      if (raw) { resolve(JSON.parse(raw)); return; }
+    } catch(e) {}
+    // 2. Fall back: fetch index.html text and extract JSON
+    fetch(window.location.origin + '/', { cache: 'no-store' })
+      .then(r => r.text())
+      .then(txt => {
+        const re = new RegExp('<script[^>]+id="fq-' + n + '"[^>]*>([\\s\\S]*?)<\\/script>', 'i');
+        const m = txt.match(re);
+        if (!m || !m[1].trim()) throw new Error('NOT_FOUND');
+        const t = JSON.parse(m[1].trim());
+        try { localStorage.setItem('qaisar_orig_fq_' + n, JSON.stringify(t)); } catch(e) {}
+        resolve(t);
+      })
+      .catch(e => reject(new Error(e.message === 'NOT_FOUND' ? 'NOT_FOUND' : 'LOAD_ERROR')));
+  });
 }
 
 let platMode = 'qd'; // 'qd' or 'fq'
@@ -1226,7 +1250,6 @@ function loadPlatformSection() {
       platCurrentSection = saved ? JSON.parse(JSON.stringify(saved)) : JSON.parse(JSON.stringify(sec));
       platCurrentSection._origN = n;
       platCurrentSection._mode = platMode;
-      // ensure section has n field
       if (!platCurrentSection.n) platCurrentSection.n = n;
       status.textContent = saved
         ? '✅ ' + (platMode==='fq'?'اختبار التكرار':'القسم') + ' ' + n + ' — نسخة معدّلة محفوظة مسبقاً'
@@ -1236,7 +1259,7 @@ function loadPlatformSection() {
     })
     .catch(e => {
       if (e.message === 'NOT_FOUND') {
-        status.textContent = '⚠️ ' + (platMode==='fq'?'اختبار التكرار':'القسم') + ' ' + n + ' غير موجود في المنصة.';
+        status.textContent = '⚠️ ' + (platMode==='fq'?'اختبار التكرار':'القسم') + ' ' + n + ' غير موجود. افتح المنصة وادخل هذا القسم أولاً.';
       } else {
         status.textContent = '❌ تعذّر التحميل: ' + e.message;
       }
