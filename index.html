@@ -799,12 +799,14 @@ sup{ vertical-align:.62em; } sub{ vertical-align:-.3em; }
 .q-nav-grid{
   flex:1; overflow-y:auto; padding:12px;
   display:grid; grid-template-columns:repeat(5,1fr); gap:6px;
+  justify-items:center;
 }
 .q-nav-btn{
   aspect-ratio:1; border-radius:8px; border:1.5px solid var(--line);
   background:var(--bg); font-size:14px; font-weight:700;
   cursor:pointer; display:flex; align-items:center; justify-content:center;
   transition:all .15s ease; color:var(--text);
+  width:100%;
 }
 .q-nav-btn:hover{ border-color:var(--gold-2); background:rgba(184,137,43,.08); }
 .q-nav-btn.current{
@@ -812,15 +814,9 @@ sup{ vertical-align:.62em; } sub{ vertical-align:-.3em; }
   border-color:var(--gold); color:var(--gold-3);
   box-shadow:0 2px 8px rgba(74,14,26,.3);
 }
-.q-nav-btn.answered-ok{
-  background:rgba(47,122,79,.15); border-color:var(--green); color:var(--green);
-}
-.q-nav-btn.answered-wrong{
-  background:rgba(164,48,42,.12); border-color:var(--red); color:var(--red);
-}
-.q-nav-btn.answered-any{
-  background:rgba(184,137,43,.12); border-color:var(--gold-2); color:var(--gold);
-}
+.q-nav-btn.answered-ok{ }
+.q-nav-btn.answered-wrong{ }
+.q-nav-btn.answered-any{ }
 
 .q-nav-overlay{
   position:fixed; inset:0; z-index:199;
