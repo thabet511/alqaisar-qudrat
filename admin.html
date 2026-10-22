@@ -662,6 +662,7 @@ tr:hover td { background: var(--bg); }
             <div class="img-upload-text">اسحب الصورة هنا أو اضغط للاختيار</div>
             <img id="imgPreview" class="img-preview" alt="معاينة الصورة">
           </div>
+          <button type="button" class="btn btn-ghost" id="clearImgBtn" onclick="clearImg()" style="display:none;margin-top:8px;color:var(--rose);border-color:var(--rose);">🗑️ حذف الصورة</button>
         </div>
       </div>
       <div class="form-row full">
@@ -1011,6 +1012,8 @@ function openAddModal() {
   document.getElementById('qF').value = '';
   document.getElementById('qFc').value = '';
   document.getElementById('imgPreview').style.display = 'none';
+  document.getElementById('qImgFile').value = '';
+  document.getElementById('clearImgBtn').style.display = 'none';
   openModal('qModal');
 }
 
@@ -1029,11 +1032,16 @@ function editQ(id) {
   ['c0','c1','c2','c3'].forEach((id, i) => document.getElementById(id).value = choices[i] || '');
   document.getElementById('qF').value = q.f || '';
   document.getElementById('qFc').value = q.fc || '';
+  // Reset file input so "change" event fires even if same file is chosen again
+  const fileInput = document.getElementById('qImgFile');
+  fileInput.value = '';
   if (q.imgDataUrl) {
     document.getElementById('imgPreview').src = q.imgDataUrl;
     document.getElementById('imgPreview').style.display = 'block';
+    document.getElementById('clearImgBtn').style.display = 'inline-flex';
   } else {
     document.getElementById('imgPreview').style.display = 'none';
+    document.getElementById('clearImgBtn').style.display = 'none';
   }
   openModal('qModal');
 }
@@ -1117,8 +1125,18 @@ function onImgChange(e) {
     const preview = document.getElementById('imgPreview');
     preview.src = currentImgDataUrl;
     preview.style.display = 'block';
+    document.getElementById('clearImgBtn').style.display = 'inline-flex';
   };
   reader.readAsDataURL(file);
+}
+
+function clearImg() {
+  currentImgDataUrl = null;
+  document.getElementById('qImgFile').value = '';
+  const preview = document.getElementById('imgPreview');
+  preview.src = '';
+  preview.style.display = 'none';
+  document.getElementById('clearImgBtn').style.display = 'none';
 }
 
 // ─────────────────────────────────────────
@@ -1229,21 +1247,3 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
 });
 
 // ─────────────────────────────────────────
-// Toast
-// ─────────────────────────────────────────
-function toast(msg, type = '') {
-  const wrap = document.getElementById('toastWrap');
-  const el = document.createElement('div');
-  el.className = 'toast ' + type;
-  el.textContent = msg;
-  wrap.appendChild(el);
-  setTimeout(() => el.remove(), 3000);
-}
-
-// ─────────────────────────────────────────
-// Utilities
-// ─────────────────────────────────────────
-const arabNums = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
-function toArab(n) { return String(n).replace(/\d/g, d => arabNums[d]); }
-function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-</script>
