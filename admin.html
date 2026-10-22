@@ -706,16 +706,12 @@ tr:hover td { background: var(--bg); }
       </div>
       <div class="form-row full">
         <div class="form-field">
-          <label>SVG الشكل (اختياري) — يُستبدل بالصورة إن وُجدت</label>
-          <textarea id="qF" rows="3" placeholder="<svg ...> (اترك فارغاً إن لم يكن هناك شكل)"></textarea>
-        </div>
-      </div>
-      <div class="form-row full">
-        <div class="form-field">
           <label>ملاحظة الشكل (fc)</label>
           <input type="text" id="qFc" placeholder="مثل: الرسم ليس على القياس">
         </div>
       </div>
+      <!-- hidden — keep SVG field for backward compat but don't show it -->
+      <input type="hidden" id="qF" value="">
     </div>
     <div class="modal-footer">
       <button class="btn btn-primary" onclick="saveQuestion()">💾 حفظ السؤال</button>
@@ -1276,12 +1272,15 @@ function renderPlatformQuestions() {
   const letters = ['أ','ب','ج','د'];
   const choiceColors = ['indigo','teal','amber','rose'];
 
-  container.innerHTML = platCurrentSection.q.map((q, qi) => `
+  container.innerHTML = platCurrentSection.q.map((q, qi) => {
+    const hasImg = !!(q.imgDataUrl);
+    const hasSvg = !!(q.f && !hasImg);
+    return `
     <div class="table-card" style="padding:18px;" id="platQ_${qi}">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
         <span class="badge badge-indigo">سؤال ${toArab(q.n)}</span>
         <span class="badge badge-emerald">الإجابة: ${q.ans}</span>
-        ${q.f ? '<span class="badge badge-amber">📐 شكل</span>' : ''}
+        ${hasImg ? '<span class="badge badge-sky">🖼️ صورة</span>' : hasSvg ? '<span class="badge badge-amber">📐 شكل SVG</span>' : ''}
       </div>
       <div class="form-field" style="margin-bottom:12px;">
         <label>نص السؤال</label>
@@ -1295,36 +1294,75 @@ function renderPlatformQuestions() {
           </div>
         `).join('')}
       </div>
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;">
         <div class="form-field" style="flex:0 0 auto;">
           <label>الإجابة</label>
           <select id="plat_ans_${qi}" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;">
             ${letters.map(l => `<option value="${l}" ${q.ans===l?'selected':''}>${l}</option>`).join('')}
           </select>
         </div>
-        ${q.f ? `<div class="form-field" style="flex:1;">
-          <label>SVG الشكل</label>
-          <textarea rows="2" id="plat_f_${qi}" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:12px;resize:vertical;">${escHtml(q.f)}</textarea>
-        </div>` : ''}
+        <div class="form-field" style="flex:1;min-width:200px;">
+          <label>صورة الشكل (اختياري)</label>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            ${hasImg ? `<img src="${q.imgDataUrl}" id="plat_img_preview_${qi}" style="max-height:120px;max-width:100%;border-radius:8px;border:1.5px solid var(--border);">` : hasSvg ? `<div style="border:1.5px solid var(--border);border-radius:8px;padding:8px;text-align:center;" id="plat_img_preview_${qi}">${q.f}</div>` : `<div id="plat_img_preview_${qi}" style="display:none;"></div>`}
+            <div style="display:flex;gap:8px;align-items:center;">
+              <label style="cursor:pointer;background:var(--bg-card);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:7px 14px;font-size:13px;display:inline-flex;align-items:center;gap:6px;">
+                🖼️ رفع صورة
+                <input type="file" accept="image/*" style="display:none;" onchange="platImgChange(event,${qi})">
+              </label>
+              <button type="button" class="btn btn-ghost" id="plat_img_clear_${qi}" onclick="platImgClear(${qi})" style="color:var(--rose);border-color:var(--rose);padding:7px 12px;font-size:13px;${(hasImg||hasSvg)?'':'display:none;'}">🗑️ حذف</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
-  `).join('');
+  `}).join('');
 
   saveLabel.textContent = 'تعديل القسم ' + toArab(platCurrentSection.n) + ' — ' + toArab(platCurrentSection.q.length) + ' سؤال';
   saveBar.style.display = 'block';
 }
 
+// ── platform image handlers ────────────────────────────────────
+function platImgChange(e, qi) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const dataUrl = ev.target.result;
+    // Store in working copy
+    platCurrentSection.q[qi].imgDataUrl = dataUrl;
+    platCurrentSection.q[qi].hasImg = true;
+    platCurrentSection.q[qi].f = ''; // remove SVG if any
+    // Update preview
+    const preview = document.getElementById('plat_img_preview_' + qi);
+    if (preview) {
+      preview.outerHTML = `<img src="${dataUrl}" id="plat_img_preview_${qi}" style="max-height:120px;max-width:100%;border-radius:8px;border:1.5px solid var(--border);">`;
+    }
+    const clearBtn = document.getElementById('plat_img_clear_' + qi);
+    if (clearBtn) clearBtn.style.display = '';
+    toast('تم رفع الصورة — اضغط حفظ لتطبيقها ✅', 'success');
+  };
+  reader.readAsDataURL(file);
+}
+
+function platImgClear(qi) {
+  platCurrentSection.q[qi].imgDataUrl = null;
+  platCurrentSection.q[qi].hasImg = false;
+  const preview = document.getElementById('plat_img_preview_' + qi);
+  if (preview) preview.outerHTML = `<div id="plat_img_preview_${qi}" style="display:none;"></div>`;
+  const clearBtn = document.getElementById('plat_img_clear_' + qi);
+  if (clearBtn) clearBtn.style.display = 'none';
+  toast('تم حذف الصورة', 'error');
+}
+
 function savePlatformSection() {
   if (!platCurrentSection) return;
-  const letters = ['أ','ب','ج','د'];
-  // Collect current values from inputs
+  // Collect text edits from inputs (images already in platCurrentSection.q[qi].imgDataUrl)
   platCurrentSection.q = platCurrentSection.q.map((q, qi) => {
     const h = document.getElementById('plat_h_' + qi)?.value.trim() || q.h;
     const ans = document.getElementById('plat_ans_' + qi)?.value || q.ans;
     const c = [0,1,2,3].map(ci => document.getElementById('plat_c' + ci + '_' + qi)?.value.trim() || q.c[ci]);
-    const fEl = document.getElementById('plat_f_' + qi);
-    const f = fEl ? (fEl.value.trim() || q.f) : q.f;
-    return { ...q, h, ans, c, ...(f !== undefined ? {f} : {}) };
+    return { ...q, h, ans, c };
   });
 
   const mode = platCurrentSection._mode || 'qd';
@@ -1334,7 +1372,7 @@ function savePlatformSection() {
     document.getElementById('platStatus').textContent = '✅ تم حفظ التعديلات للقسم ' + platCurrentSection.n + ' — ستُطبَّق على المنصة تلقائياً.';
     toast('تم حفظ القسم ' + platCurrentSection.n + ' ✅', 'success');
   } catch(e) {
-    toast('فشل الحفظ — المتصفح ممتلئ؟', 'error');
+    toast('فشل الحفظ — الصور كبيرة جداً؟ جرب ضغط حجمها أولاً', 'error');
   }
 }
 
@@ -1361,6 +1399,123 @@ function openAddTestModal() {
   buildTestQuestions();
   openModal('addTestModal');
 }
+
+function onTestTypeChange() {
+  const type = document.getElementById('testType').value;
+  document.getElementById('testNum').max = type === 'fq' ? settings.freq : settings.sections;
+  const defaultCount = type === 'fq' ? 50 : 11;
+  document.getElementById('testQCount').value = defaultCount;
+  buildTestQuestions();
+}
+
+function buildTestQuestions() {
+  const count = parseInt(document.getElementById('testQCount').value) || 11;
+  const container = document.getElementById('testQuestionsContainer');
+  const letters = ['أ','ب','ج','د'];
+  let html = '';
+  for (let i = 1; i <= count; i++) {
+    html += `<div class="test-q-block" style="border:1px solid var(--border);border-radius:10px;padding:16px;background:var(--bg);">
+      <div style="font-weight:700;color:var(--indigo);margin-bottom:12px;">السؤال ${toArab(i)}</div>
+      <div class="form-field" style="margin-bottom:10px;">
+        <label>نص السؤال</label>
+        <textarea id="tq_h_${i}" rows="2" placeholder="اكتب نص السؤال..."></textarea>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+        ${letters.map((l,j)=>`<div class="choice-item"><div class="choice-letter" style="background:var(--indigo-lt);color:var(--indigo);min-width:28px;text-align:center;border-radius:6px;padding:4px 8px;">${l}</div><input type="text" id="tq_c${j}_${i}" placeholder="الخيار ${l}"></div>`).join('')}
+      </div>
+      <div class="form-row" style="gap:10px;">
+        <div class="form-field">
+          <label>الإجابة الصحيحة</label>
+          <select id="tq_ans_${i}">
+            ${letters.map(l=>`<option value="${l}">${l}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-field">
+          <label>صورة السؤال (اختياري)</label>
+          <input type="file" id="tq_img_${i}" accept="image/*" style="font-size:13px;padding:4px;">
+        </div>
+      </div>
+    </div>`;
+  }
+  container.innerHTML = html;
+}
+
+async function saveFullTest() {
+  const type = document.getElementById('testType').value;
+  const section = parseInt(document.getElementById('testNum').value);
+  const count = parseInt(document.getElementById('testQCount').value) || 11;
+  let added = 0;
+  for (let i = 1; i <= count; i++) {
+    const h = (document.getElementById(`tq_h_${i}`)?.value || '').trim();
+    if (!h) continue;
+    const choices = [0,1,2,3].map(j => (document.getElementById(`tq_c${j}_${i}`)?.value || '').trim());
+    const ans = document.getElementById(`tq_ans_${i}`)?.value || 'أ';
+    const imgFile = document.getElementById(`tq_img_${i}`)?.files?.[0];
+    let imgDataUrl = null;
+    if (imgFile) {
+      imgDataUrl = await new Promise(res => {
+        const r = new FileReader();
+        r.onload = e => res(e.target.result);
+        r.readAsDataURL(imgFile);
+      });
+    }
+    const q = {
+      id: `q_${Date.now()}_${i}`,
+      type, section, n: i, ans, h, choices,
+      f: '', fc: '',
+      imgDataUrl, hasImg: !!imgDataUrl,
+      updatedAt: Date.now()
+    };
+    // Remove existing question with same type/section/n
+    localQuestions = localQuestions.filter(x => !(x.type===type && x.section===section && x.n===i));
+    localQuestions.push(q);
+    added++;
+  }
+  save();
+  closeModal('addTestModal');
+  if (currentPage === 'sections') loadSectionsTable();
+  if (currentPage === 'freq') loadFreqTable();
+  loadDashboard();
+  toast(`تم إضافة ${toArab(added)} سؤال ✅`, 'success');
+}
+
+function onQTypeChange() {
+  const type = document.getElementById('qType').value;
+  document.getElementById('qSectionNum').max = type === 'fq' ? settings.freq : settings.sections;
+}
+
+// ─────────────────────────────────────────
+// Modal helpers
+// ─────────────────────────────────────────
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+});
+
+// ─────────────────────────────────────────
+// Toast
+// ─────────────────────────────────────────
+function toast(msg, type = '') {
+  const wrap = document.getElementById('toastWrap');
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  wrap.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+// ─────────────────────────────────────────
+// Utilities
+// ─────────────────────────────────────────
+const arabNums = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+function toArab(n) { return String(n).replace(/\d/g, d => arabNums[d]); }
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+</script>
 
 function onTestTypeChange() {
   const type = document.getElementById('testType').value;
