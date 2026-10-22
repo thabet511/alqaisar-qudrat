@@ -1108,6 +1108,8 @@ function getSection(n){
   try{ sec = JSON.parse(el.textContent); }catch(e){ return null; }
   sectionCache[n] = sec;
   el.textContent = '';
+  // Cache original data for admin panel access
+  try{ localStorage.setItem('qaisar_orig_qd_'+n, JSON.stringify(sec)); }catch(e){}
   return sec;
 }
 
@@ -1126,6 +1128,8 @@ function getFreqTest(n){
   try{ t = JSON.parse(el.textContent); }catch(e){ return null; }
   freqCache[n] = t;
   el.textContent = '';
+  // Cache original data for admin panel access
+  try{ localStorage.setItem('qaisar_orig_fq_'+n, JSON.stringify(t)); }catch(e){}
   return t;
 }
 
