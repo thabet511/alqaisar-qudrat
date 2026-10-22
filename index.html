@@ -1517,11 +1517,14 @@ function renderQuizGeneric(mode, n){
     const q = sec.q[quizState.idx];
     const answered = quizState.answers[quizState.idx];
     const pct = Math.round(((quizState.idx)/qcount)*100);
-    const hasFig = !!q.f;
+    const hasFig = !!(q.f || q.imgDataUrl);
     const valsHtml = q.v ? `<div class="qvals">${q.v.map((v,i)=>
       `<div class="qval"><span class="qval-label">${i===0?'القيمة الأولى':'القيمة الثانية'}</span><div class="qval-body">${v}</div></div>`
     ).join('')}</div>` : '';
-    const figHtml = hasFig ? `<div class="qfig-wrap"><div class="qfig">${q.f}</div>${q.fc ? `<div class="qfig-cap">${q.fc}</div>` : ''}</div>` : '';
+    const figContent = q.imgDataUrl
+      ? `<img src="${q.imgDataUrl}" style="max-width:100%;border-radius:8px;display:block;margin:0 auto;">`
+      : (q.f || '');
+    const figHtml = hasFig ? `<div class="qfig-wrap"><div class="qfig">${figContent}</div>${q.fc ? `<div class="qfig-cap">${q.fc}</div>` : ''}</div>` : '';
     const chCls = 'choices' + (q.lc ? ' long' : '') + (q.sc ? ' pics' : '');
 
     app.innerHTML = `
