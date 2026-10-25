@@ -580,7 +580,8 @@ tr:hover td { background: var(--bg); }
             <span class="table-title">✏️ تعديل أقسام المنصة</span>
           </div>
           <div style="padding:18px;display:flex;flex-direction:column;gap:14px;">
-            <p style="font-size:13px;color:var(--fg-muted);">اختر النوع والرقم لتحميل الأسئلة من المنصة وتعديلها. التعديلات تُحفظ في المتصفح وتُطبَّق على المنصة تلقائياً.</p>
+            <p style="font-size:13px;color:var(--fg-muted);">اختر النوع والرقم لتحميل الأسئلة من المنصة وتعديلها.</p>
+            <div id="platCloudStatus" style="font-size:13px;font-weight:700;padding:8px 14px;border-radius:var(--radius-sm);background:var(--bg);"></div>
             <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--indigo-lt);border-radius:var(--radius-sm);padding:10px 14px;">
               <button class="btn btn-primary" onclick="syncPlatformData()" id="platSyncBtn">🔄 مزامنة بيانات المنصة الآن</button>
               <span id="platSyncStatus" style="font-size:13px;color:var(--fg-muted);">اضغط هذا الزر أول مرة لجلب كل الأقسام والاختبارات من المنصة.</span>
@@ -794,6 +795,59 @@ tr:hover td { background: var(--bg); }
   </div>
 </div>
 
+<!-- ── Cloud sync (Firebase Firestore) ──────────────────────────────────────
+     Same config as index.html — MUST be the exact same project so both
+     pages read/write the same database. See FIREBASE_SETUP.md. -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script>
+const FIREBASE_CONFIG = {
+  apiKey: "PASTE_YOUR_API_KEY",
+  authDomain: "PASTE_YOUR_PROJECT.firebaseapp.com",
+  projectId: "PASTE_YOUR_PROJECT_ID",
+  storageBucket: "PASTE_YOUR_PROJECT.appspot.com",
+  messagingSenderId: "PASTE_SENDER_ID",
+  appId: "PASTE_APP_ID"
+};
+let _qaisarDb = null;
+try{
+  if(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.indexOf('PASTE_') !== 0 && typeof firebase !== 'undefined'){
+    firebase.initializeApp(FIREBASE_CONFIG);
+    _qaisarDb = firebase.firestore();
+  }
+}catch(e){ console.warn('[qaisar-admin] Firebase init failed — edits will stay local to this browser only.', e); }
+
+function qaisarCloudReady(){ return !!_qaisarDb; }
+
+// Read one override doc ('qd_12', 'fq_7', 'settings') from Firestore.
+// Returns null (never throws) if not configured, offline, or not found.
+async function qaisarCloudGet(id){
+  if(!_qaisarDb) return null;
+  try{
+    const snap = await _qaisarDb.collection('overrides').doc(id).get();
+    return snap.exists ? snap.data() : null;
+  }catch(e){ console.warn('[qaisar-admin] cloud read failed for', id, e); return null; }
+}
+
+// Write one override doc. Returns true/false (never throws).
+async function qaisarCloudSet(id, data){
+  if(!_qaisarDb) return false;
+  try{
+    await _qaisarDb.collection('overrides').doc(id).set(data);
+    return true;
+  }catch(e){ console.warn('[qaisar-admin] cloud save failed for', id, e); return false; }
+}
+
+// Delete one override doc. Returns true/false (never throws).
+async function qaisarCloudDelete(id){
+  if(!_qaisarDb) return false;
+  try{
+    await _qaisarDb.collection('overrides').doc(id).delete();
+    return true;
+  }catch(e){ console.warn('[qaisar-admin] cloud delete failed for', id, e); return false; }
+}
+</script>
+
 <script>
 // ─────────────────────────────────────────
 // State
@@ -866,6 +920,7 @@ function initApp() {
   applySettings();
   buildFilterDropdowns();
   showPage('dashboard', document.querySelector('.nav-item'));
+  renderCloudStatusBadge();
 }
 
 function applySettings() {
@@ -881,7 +936,26 @@ function saveSettings() {
   settings.freq = parseInt(document.getElementById('settingFreq').value) || 30;
   settings.trainer = document.getElementById('settingTrainer').value.trim();
   save(); applySettings(); buildFilterDropdowns();
-  toast('تم حفظ الإعدادات ✅', 'success');
+  if(qaisarCloudReady()){
+    qaisarCloudSet('settings', { section_count: settings.sections, freq_count: settings.freq }).then(ok=>{
+      toast(ok ? 'تم حفظ الإعدادات ونشرها لكل المستخدمين ✅' : 'تم الحفظ محلياً، لكن فشلت المزامنة السحابية ⚠️', ok?'success':'error');
+    });
+  } else {
+    toast('تم حفظ الإعدادات محلياً فقط (لم يتم إعداد قاعدة البيانات السحابية بعد) ⚠️', 'error');
+  }
+}
+
+// ── Cloud connection status badge (shown at top of Platform Edit page) ──
+function renderCloudStatusBadge(){
+  const el = document.getElementById('platCloudStatus');
+  if(!el) return;
+  if(qaisarCloudReady()){
+    el.innerHTML = '🟢 متصل بقاعدة البيانات السحابية — كل تعديل يظهر فوراً لجميع الطلاب';
+    el.style.color = 'var(--emerald)';
+  } else {
+    el.innerHTML = '🔴 غير متصل بقاعدة بيانات سحابية — التعديلات ستبقى محفوظة في هذا المتصفح فقط ولن يراها باقي المستخدمين. راجع FIREBASE_SETUP.md لربط قاعدة البيانات.';
+    el.style.color = 'var(--rose)';
+  }
 }
 
 function buildFilterDropdowns() {
@@ -1293,31 +1367,43 @@ function fetchPlatFreq(n) {
 
 let platMode = 'qd'; // 'qd' or 'fq'
 
-function loadPlatformSection() {
+async function loadPlatformSection() {
   const n = parseInt(document.getElementById('platSecNum').value);
   if (!n || n < 1) { toast('أدخل رقم صحيح', 'error'); return; }
   platMode = document.getElementById('platMode').value;
 
   const overrideKey = 'qaisar_admin_' + platMode + '_' + n;
-  let saved = null;
-  try { const v = localStorage.getItem(overrideKey); if (v) saved = JSON.parse(v); } catch(e) {}
-
   const status = document.getElementById('platStatus');
   status.textContent = '⏳ جاري التحميل...';
 
-  // If an edited version is already saved, use it directly — no need
-  // for the original cache to exist at all.
+  // 1) Cloud is the source of truth — check it first so edits made from
+  //    ANY device/browser are picked up here, not just this one.
+  let saved = qaisarCloudReady() ? await qaisarCloudGet(overrideKey) : null;
+  let fromCloud = !!saved;
+
+  // 2) Fall back to this browser's local cache (works offline, or before
+  //    the cloud database is configured at all).
+  if (!saved) {
+    try { const v = localStorage.getItem(overrideKey); if (v) saved = JSON.parse(v); } catch(e) {}
+  }
+
+  // If an edited version exists (cloud or local), use it directly — no
+  // need for the original cache to exist at all.
   if (saved) {
     platCurrentSection = JSON.parse(JSON.stringify(saved));
     platCurrentSection._origN = n;
     platCurrentSection._mode = platMode;
     if (!platCurrentSection.n) platCurrentSection.n = n;
-    status.textContent = '✅ ' + (platMode==='fq'?'اختبار التكرار':'القسم') + ' ' + n + ' — نسخة معدّلة محفوظة مسبقاً';
+    // Keep the local cache in step with the cloud copy we just loaded
+    if (fromCloud) { try { localStorage.setItem(overrideKey, JSON.stringify(saved)); } catch(e){} }
+    status.textContent = '✅ ' + (platMode==='fq'?'اختبار التكرار':'القسم') + ' ' + n + ' — نسخة معدّلة محفوظة مسبقاً' + (fromCloud ? ' (من قاعدة البيانات السحابية)' : ' (محلياً فقط)');
     renderPlatformQuestions();
     toast('تم التحميل ✅', 'success');
     return;
   }
 
+  // 3) No edit exists yet anywhere — fall back to the ORIGINAL unedited
+  //    content cached from the live site (see fetchPlatSection/fetchPlatFreq).
   const fetchFn = platMode === 'fq' ? fetchPlatFreq(n) : fetchPlatSection(n);
   fetchFn
     .then(sec => {
@@ -1431,7 +1517,7 @@ function platImgClear(qi) {
   toast('تم حذف الصورة', 'error');
 }
 
-function savePlatformSection() {
+async function savePlatformSection() {
   if (!platCurrentSection) return;
   // Collect text edits from inputs (images already in platCurrentSection.q[qi].imgDataUrl)
   platCurrentSection.q = platCurrentSection.q.map((q, qi) => {
@@ -1443,26 +1529,53 @@ function savePlatformSection() {
 
   const mode = platCurrentSection._mode || 'qd';
   const key = 'qaisar_admin_' + mode + '_' + platCurrentSection._origN;
+  const statusEl = document.getElementById('platStatus');
+  const label = mode === 'fq' ? 'اختبار التكرار' : 'القسم';
+
+  // 1) Always save locally first — this never fails and keeps this
+  //    browser working even if the cloud write below fails.
   try {
     localStorage.setItem(key, JSON.stringify(platCurrentSection));
-    document.getElementById('platStatus').textContent = '✅ تم حفظ التعديلات للقسم ' + platCurrentSection.n + ' — ستُطبَّق على المنصة تلقائياً.';
-    toast('تم حفظ القسم ' + platCurrentSection.n + ' ✅', 'success');
   } catch(e) {
-    toast('فشل الحفظ — الصور كبيرة جداً؟ جرب ضغط حجمها أولاً', 'error');
+    toast('فشل الحفظ المحلي — الصور كبيرة جداً؟ جرب ضغط حجمها أولاً', 'error');
+    return;
+  }
+
+  // 2) Push to the cloud so every student's device sees the change too.
+  if (!qaisarCloudReady()) {
+    statusEl.textContent = '✅ تم الحفظ محلياً فقط — قاعدة البيانات السحابية غير مُعدّة بعد (راجع FIREBASE_SETUP.md) فلن يرى بقية الطلاب هذا التعديل.';
+    toast('تم الحفظ محلياً فقط ⚠️', 'error');
+    return;
+  }
+  statusEl.textContent = '⏳ جاري نشر التعديلات لجميع الطلاب...';
+  const payloadSize = JSON.stringify(platCurrentSection).length;
+  if (payloadSize > 900000) {
+    statusEl.textContent = '⚠️ تم الحفظ محلياً، لكن حجم البيانات كبير جداً (' + Math.round(payloadSize/1024) + ' كيلوبايت) ولا يمكن رفعه لقاعدة البيانات (الحد الأقصى ١ ميجابايت لكل قسم). قلّل حجم الصور ثم أعد الحفظ.';
+    toast('البيانات كبيرة جداً على قاعدة البيانات السحابية ⚠️', 'error');
+    return;
+  }
+  const ok = await qaisarCloudSet(key, platCurrentSection);
+  if (ok) {
+    statusEl.textContent = '✅ تم حفظ ونشر التعديلات لـ' + label + ' ' + platCurrentSection.n + ' — ستظهر فوراً لكل الطلاب.';
+    toast('تم الحفظ ونُشر للجميع ✅', 'success');
+  } else {
+    statusEl.textContent = '⚠️ تم الحفظ محلياً، لكن فشلت المزامنة السحابية — تحقّق من اتصال الإنترنت وحاول مجدداً.';
+    toast('فشلت المزامنة السحابية ⚠️', 'error');
   }
 }
 
-function resetPlatformSection() {
+async function resetPlatformSection() {
   const n = parseInt(document.getElementById('platSecNum').value);
   const mode = document.getElementById('platMode')?.value || 'qd';
   if (!n) return;
   const key = 'qaisar_admin_' + mode + '_' + n;
   localStorage.removeItem(key);
+  if (qaisarCloudReady()) { await qaisarCloudDelete(key); }
   platCurrentSection = null;
   document.getElementById('platQuestionsContainer').innerHTML = '';
   document.getElementById('platSaveBar').style.display = 'none';
   const label = mode === 'fq' ? 'اختبار التكرار' : 'القسم';
-  document.getElementById('platStatus').textContent = '↩️ تم حذف التعديلات للـ' + label + ' ' + n + ' — استُعيد الأصلي.';
+  document.getElementById('platStatus').textContent = '↩️ تم حذف التعديلات للـ' + label + ' ' + n + ' — استُعيد الأصلي لجميع الطلاب.';
   toast('تم استعادة الأصلي ✅', 'success');
 }
 
